@@ -18,9 +18,7 @@ LM Studio のローカル LLM を使って、日本語入力から Stable Diffus
 
 
    ※ 必ず Instruct モデルを使用してください。Base モデルではシステムプロンプトに従いません。
-
    ※ 開発・検証は 16GB VRAM 環境で `Qwen3-8B-Instruct` を使用しています。VRAM が少ない場合は `Qwen3-4B-Instruct`（12GB）などの軽量モデルが候補ですが、動作は未検証です。
-
    ※ NSFW 用途の場合は検索キーワードに `Heretic` や `abliterated` を加えると、検閲解除済みのモデルが見つかります。
 
 3. **Developer** タブで **Start Server** をクリックしてサーバーを起動
