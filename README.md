@@ -28,7 +28,7 @@ LM Studio のローカル LLM を使って、日本語入力から Stable Diffus
 2. **Extensions** タブ → **Install from URL** を開く
 3. 以下のURLを貼り付けて Install をクリック：
    ```
-   https://github.com/aplogicak/sd-webui-llmuse
+   https://github.com/ranran141/sd-webui-llmuse
    ```
 4. WebUI を再起動
 
