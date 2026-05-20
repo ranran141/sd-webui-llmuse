@@ -19,7 +19,6 @@ DEFAULT_SETTINGS = {
     "gpu_ttl_enabled": False,
     "gpu_ttl":         300,
     "lm_url":          "http://localhost:1234",
-    "auto_send":       False,
     "send_mode":       "append",
     "auto_generate":   False,
     "continuous_generate": False,
@@ -77,7 +76,6 @@ def _save_settings(data: dict):
     if "gpu_ttl_enabled" in data: s["gpu_ttl_enabled"] = bool(data["gpu_ttl_enabled"])
     if "gpu_ttl"         in data: s["gpu_ttl"]         = max(1, int(data["gpu_ttl"]))
     if "lm_url"          in data: s["lm_url"]          = str(data["lm_url"]).rstrip("/") or "http://localhost:1234"
-    if "auto_send"       in data: s["auto_send"]       = bool(data["auto_send"])
     if "send_mode"       in data: s["send_mode"]       = "replace" if str(data["send_mode"]) == "replace" else "append"
     if "auto_generate"   in data: s["auto_generate"]   = bool(data["auto_generate"])
     if "continuous_generate" in data: s["continuous_generate"] = bool(data["continuous_generate"])
@@ -434,8 +432,7 @@ class LLMDecoratorScript(scripts.Script):
                 result = _call_lm(user_input, system_prompt)
                 s = _load_settings()
                 should_auto_send = (
-                    s.get("auto_send")
-                    or s.get("auto_generate")
+                    s.get("auto_generate")
                     or s.get("continuous_generate")
                 )
                 if should_auto_send and result and not result.startswith("Error"):

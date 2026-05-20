@@ -231,7 +231,6 @@ function llmDecOpenSettings(tab) {
     const ttlEnabled = s.gpu_ttl_enabled     ?? false;
     const ttl        = s.gpu_ttl             ?? 300;
     const lmUrl      = s.lm_url              ?? "http://localhost:1234";
-    const autoSend   = s.auto_send           ?? false;
     const autoGen    = s.auto_generate       ?? false;
     const contGen    = s.continuous_generate ?? false;
     const loopDelay  = s.loop_delay          ?? 500;
@@ -263,16 +262,6 @@ function llmDecOpenSettings(tab) {
                         <input type="number" class="llm-dec-settings-num" id="llm-dec-settings-temp"
                             min="0.1" max="2.0" step="0.1" value="${temp}">
                     </div>
-                </div>
-
-                <!-- Auto-send -->
-                <div class="llm-dec-settings-row">
-                    <label class="llm-dec-settings-label">Auto-send</label>
-                    <label class="llm-dec-settings-check-label">
-                        <input type="checkbox" id="llm-dec-settings-auto-send"
-                            ${autoSend ? "checked" : ""}>
-                        <span class="llm-dec-settings-hint">Send to prompt automatically after generation</span>
-                    </label>
                 </div>
 
                 <!-- Auto-generate -->
@@ -380,7 +369,6 @@ function llmDecSaveSettings(tab) {
     const ttlEn    = document.getElementById("llm-dec-settings-ttl-enabled")?.checked      ?? false;
     const ttl      = parseInt(document.getElementById("llm-dec-settings-ttl")?.value)      || 300;
     const lmUrl    = document.getElementById("llm-dec-settings-url")?.value.trim()         || "http://localhost:1234";
-    const autoSend = document.getElementById("llm-dec-settings-auto-send")?.checked        ?? false;
     const autoGen  = document.getElementById("llm-dec-settings-autogen")?.checked          ?? false;
     const contGen  = document.getElementById("llm-dec-settings-continuous")?.checked       ?? false;
     const loopDelay = parseInt(document.getElementById("llm-dec-settings-loop-delay")?.value) || 500;
@@ -391,7 +379,6 @@ function llmDecSaveSettings(tab) {
         gpu_ttl_enabled: ttlEn,
         gpu_ttl: ttl,
         lm_url: lmUrl,
-        auto_send: autoSend,
         auto_generate: autoGen,
         continuous_generate: contGen,
         loop_delay: loopDelay
