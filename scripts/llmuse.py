@@ -21,6 +21,9 @@ DEFAULT_SETTINGS = {
     "lm_url":          "http://localhost:1234",
     "auto_send":       False,
     "send_mode":       "append",
+    "auto_generate":   False,
+    "continuous_generate": False,
+    "loop_delay":      500,
     "last_preset":     "",
 }
 
@@ -76,6 +79,9 @@ def _save_settings(data: dict):
     if "lm_url"          in data: s["lm_url"]          = str(data["lm_url"]).rstrip("/") or "http://localhost:1234"
     if "auto_send"       in data: s["auto_send"]       = bool(data["auto_send"])
     if "send_mode"       in data: s["send_mode"]       = "replace" if str(data["send_mode"]) == "replace" else "append"
+    if "auto_generate"   in data: s["auto_generate"]   = bool(data["auto_generate"])
+    if "continuous_generate" in data: s["continuous_generate"] = bool(data["continuous_generate"])
+    if "loop_delay"      in data: s["loop_delay"]      = max(0, int(data["loop_delay"]))
     SETTINGS_FILE.write_text(json.dumps(s, ensure_ascii=False, indent=2), encoding="utf-8")
     return s
 
@@ -253,7 +259,7 @@ class LLMDecoratorScript(scripts.Script):
                         preset_btn   = gr.Button("📋", scale=1, min_width=40)
                         settings_btn = gr.Button("⚙",  scale=1, min_width=40)
                     user_input = gr.Textbox(lines=4, show_label=False)
-                    run_btn = gr.Button("Run LLM", variant="primary")
+                    run_btn = gr.Button("Run LLM", variant="primary", elem_id=f"llm_dec_run_btn_{tab}")
                 with gr.Column(scale=1):
                     send_mode = settings.get("send_mode", "append")
                     with gr.Row():
@@ -273,7 +279,7 @@ class LLMDecoratorScript(scripts.Script):
                         lines=4, show_label=False, interactive=True,
                         elem_id=f"llm_dec_output_{tab}",
                     )
-                    send_btn = gr.Button("Send", variant="secondary")
+                    send_btn = gr.Button("Send", variant="secondary", elem_id=f"llm_dec_send_btn_{tab}")
 
             # ── 非表示コンポーネント: プリセット
             system_prompt = gr.Textbox(
@@ -426,7 +432,13 @@ class LLMDecoratorScript(scripts.Script):
 
             def _call_lm_ui(user_input: str, system_prompt: str):
                 result = _call_lm(user_input, system_prompt)
-                if _load_settings().get("auto_send") and result and not result.startswith("Error"):
+                s = _load_settings()
+                should_auto_send = (
+                    s.get("auto_send")
+                    or s.get("auto_generate")
+                    or s.get("continuous_generate")
+                )
+                if should_auto_send and result and not result.startswith("Error"):
                     return gr.update(value=""), result
                 return result, ""
 
@@ -437,4 +449,4 @@ class LLMDecoratorScript(scripts.Script):
                 fn=None, inputs=[lm_result], outputs=[],
                 _js=f"(t) => llmDecAutoSend(t, '{tab}')",
             )
-            send_btn.click(fn=None, inputs=[output], outputs=[], _js=f"(t) => llmDecSend(t, '{tab}')")
+            send_btn.click(fn=None, inputs=[output], outputs=[], _js=f"(t) => llmDecManualSend(t, '{tab}')")
