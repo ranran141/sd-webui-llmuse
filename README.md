@@ -2,6 +2,8 @@
 
 LM Studio のローカル LLM を使って、日本語入力から英語プロンプトを生成する Forge Neo 拡張機能です
 
+![screenshot](screenshot.png)
+
 ## 機能
 
 - 日本語を入力するだけで英語プロンプトを生成
