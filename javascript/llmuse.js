@@ -3,19 +3,201 @@
 const SVG_TRASH    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
 const SVG_PLUS     = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
 
-/* ── プロンプト欄へ送信 ── */
-function llmDecSend(text, tab) {
+const LLM_DEC_LOOP_STATE = window.LLM_DEC_LOOP_STATE || (window.LLM_DEC_LOOP_STATE = {});
+
+/* ── 設定JSON取得 ── */
+function llmDecGetSettings(tab) {
+    const el = gradioApp().querySelector(`#llm_dec_settings_json_${tab} textarea`);
+    if (!el) return {};
+    try { return JSON.parse(el.value || "{}"); } catch { return {}; }
+}
+
+/* ── 連続生成状態 ── */
+function llmDecLoopState(tab) {
+    return LLM_DEC_LOOP_STATE[tab] || (LLM_DEC_LOOP_STATE[tab] = {
+        active: false,
+        stopAfterCurrent: false,
+        runningImage: false,
+        generationToken: 0
+    });
+}
+
+function llmDecStopLoop(tab) {
+    if (tab) {
+        const st = llmDecLoopState(tab);
+        st.active = false;
+        st.stopAfterCurrent = true;
+        llmDecSetLoopBadge(tab, "Stopping after this image", "stopping");
+        return;
+    }
+    for (const k of Object.keys(LLM_DEC_LOOP_STATE)) {
+        const st = llmDecLoopState(k);
+        st.active = false;
+        st.stopAfterCurrent = true;
+        llmDecSetLoopBadge(k, "Stopping after this image", "stopping");
+    }
+}
+
+function llmDecSetLoopBadge(tab, text, mode = "") {
+    const btn = llmDecFindRunButton(tab);
+    if (!btn) return;
+
+    btn.dataset.llmDecOrigTitle = btn.dataset.llmDecOrigTitle || btn.title || "";
+    btn.dataset.llmDecOrigText  = btn.dataset.llmDecOrigText  || (btn.textContent || "Run LLM").trim();
+
+    btn.classList.remove("llm-dec-loop-active", "llm-dec-loop-stopping");
+
+    if (text) {
+        btn.title = text;
+
+        if (mode === "stopping") {
+            btn.textContent = "Stopping...";
+            btn.classList.add("llm-dec-loop-stopping");
+        } else {
+            btn.textContent = "Continuous...";
+            btn.classList.add("llm-dec-loop-active");
+        }
+    } else {
+        btn.title = btn.dataset.llmDecOrigTitle || "";
+        btn.textContent = btn.dataset.llmDecOrigText || "Run LLM";
+    }
+}
+
+/* ── A1111/Forge系の画像生成ボタン検出 ── */
+function llmDecFindGenerateButton(tab) {
+    const app = gradioApp();
+    return app.querySelector(`#${tab}_generate`) ||
+           app.querySelector(`#${tab}_generate button`) ||
+           app.querySelector(`button#${tab}_generate`);
+}
+
+/* Run LLMボタンはPython側のelem_idが不明な場合に備え、文言でも探す */
+function llmDecFindRunButton(tab) {
+    const app = gradioApp();
+    return app.querySelector(`#llm_dec_run_${tab}`) ||
+           app.querySelector(`#llm_dec_run_btn_${tab}`) ||
+           [...app.querySelectorAll("button")]
+               .find(b => /run\s*llm/i.test((b.textContent || "").trim()));
+}
+
+function llmDecClickGenerate(tab) {
+    const btn = llmDecFindGenerateButton(tab);
+    if (!btn || btn.disabled) return false;
+    btn.click();
+    return true;
+}
+
+function llmDecClickRunLLM(tab) {
+    const btn = llmDecFindRunButton(tab);
+    if (!btn || btn.disabled) return false;
+    btn.click();
+    return true;
+}
+
+function llmDecIsImageGenerating(tab) {
+    const app = gradioApp();
+    const gen = llmDecFindGenerateButton(tab);
+    const interrupt = app.querySelector(`#${tab}_interrupt`);
+    const skip = app.querySelector(`#${tab}_skip`);
+    return !!(
+        (gen && gen.disabled) ||
+        (interrupt && !interrupt.disabled && interrupt.offsetParent !== null) ||
+        (skip && !skip.disabled && skip.offsetParent !== null)
+    );
+}
+
+function llmDecSleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function llmDecWaitImageDone(tab, token) {
+    const st = llmDecLoopState(tab);
+
+    // 生成開始の反映待ち
+    for (let i = 0; i < 40; i++) {
+        if (st.generationToken !== token) return false;
+        if (llmDecIsImageGenerating(tab)) break;
+        await llmDecSleep(250);
+    }
+
+    // 生成完了待ち
+    for (;;) {
+        if (st.generationToken !== token) return false;
+        if (!llmDecIsImageGenerating(tab)) return true;
+        await llmDecSleep(700);
+    }
+}
+
+async function llmDecStartImageThenMaybeLoop(tab) {
+    const s = llmDecGetSettings(tab);
+    const st = llmDecLoopState(tab);
+
+    if (st.runningImage) return;
+    st.runningImage = true;
+    const token = ++st.generationToken;
+
+    const clicked = llmDecClickGenerate(tab);
+    if (!clicked) {
+        st.runningImage = false;
+        llmDecSetLoopBadge(tab, "");
+        return;
+    }
+
+    await llmDecWaitImageDone(tab, token);
+
+    st.runningImage = false;
+
+    if (st.stopAfterCurrent) {
+        st.active = false;
+        st.stopAfterCurrent = false;
+        llmDecSetLoopBadge(tab, "");
+        return;
+    }
+
+    if (s.continuous_generate && st.active) {
+        const delay = parseInt(s.loop_delay ?? 500) || 500;
+        llmDecSetLoopBadge(tab, "Continuous LLM generation is active. Right-click Run LLM to stop after current image.", "active");
+        await llmDecSleep(delay);
+        if (!st.stopAfterCurrent) llmDecClickRunLLM(tab);
+    } else {
+        llmDecSetLoopBadge(tab, "");
+    }
+}
+
+/* Run LLMボタン右クリックで「この画像で停止」 */
+(function llmDecInstallRunLLMContextStop() {
+    if (window.__llm_dec_context_stop_installed) return;
+    window.__llm_dec_context_stop_installed = true;
+
+    document.addEventListener("contextmenu", function(e) {
+        const btn = e.target.closest?.("button");
+        if (!btn) return;
+        if (!/run\s*llm/i.test((btn.textContent || "").trim()) &&
+            !btn.id?.startsWith("llm_dec_run_")) return;
+
+        e.preventDefault();
+        const tab = btn.closest("#tab_img2img") ? "img2img" : "txt2img";
+        llmDecStopLoop(tab);
+    }, true);
+})();
+
+
+/* ── プロンプト欄へ送信：設定に応じて追記 / 上書き ── */
+function llmDecSend(text, tab, forceReplace = false) {
     const el = gradioApp().querySelector(`#${tab}_prompt textarea`);
     if (!el) return text;
-    const settingsEl = gradioApp().querySelector(`#llm_dec_settings_json_${tab} textarea`);
-    const s = settingsEl ? (() => { try { return JSON.parse(settingsEl.value); } catch { return {}; } })() : {};
-    if (s.send_mode === 'replace') {
+
+    const s = llmDecGetSettings(tab);
+
+    if (forceReplace || s.send_mode === "replace") {
         el.value = text;
     } else {
         const existing = el.value.trim();
         el.value = existing ? existing + "\n" + text : text;
     }
+
     el.dispatchEvent(new Event("input", { bubbles: true }));
+
     return text;
 }
 
@@ -45,11 +227,14 @@ function llmDecOpenSettings(tab) {
     llmDecCloseSettings();
     const settingsEl = gradioApp().querySelector(`#llm_dec_settings_json_${tab} textarea`);
     const s = settingsEl ? (() => { try { return JSON.parse(settingsEl.value); } catch { return {}; } })() : {};
-    const timeout    = s.timeout         ?? 30;
-    const ttlEnabled = s.gpu_ttl_enabled ?? false;
-    const ttl        = s.gpu_ttl         ?? 300;
-    const lmUrl      = s.lm_url          ?? "http://localhost:1234";
-    const autoSend   = s.auto_send ?? false;
+    const timeout    = s.timeout             ?? 30;
+    const ttlEnabled = s.gpu_ttl_enabled     ?? false;
+    const ttl        = s.gpu_ttl             ?? 300;
+    const lmUrl      = s.lm_url              ?? "http://localhost:1234";
+    const autoSend   = s.auto_send           ?? false;
+    const autoGen    = s.auto_generate       ?? false;
+    const contGen    = s.continuous_generate ?? false;
+    const loopDelay  = s.loop_delay          ?? 500;
     const temp       = parseFloat(s.temperature ?? 0.8).toFixed(1);
 
     const modal = document.createElement("div");
@@ -88,6 +273,31 @@ function llmDecOpenSettings(tab) {
                             ${autoSend ? "checked" : ""}>
                         <span class="llm-dec-settings-hint">Send to prompt automatically after generation</span>
                     </label>
+                </div>
+
+                <!-- Auto-generate -->
+                <div class="llm-dec-settings-row">
+                    <label class="llm-dec-settings-label">Auto-generate</label>
+                    <label class="llm-dec-settings-check-label">
+                        <input type="checkbox" id="llm-dec-settings-autogen"
+                            ${autoGen ? "checked" : ""}>
+                        Start image generation after sending to prompt
+                    </label>
+                </div>
+
+                <!-- Continuous -->
+                <div class="llm-dec-settings-row">
+                    <label class="llm-dec-settings-label">Continuous</label>
+                    <label class="llm-dec-settings-check-label">
+                        <input type="checkbox" id="llm-dec-settings-continuous"
+                            ${contGen ? "checked" : ""}>
+                        Repeat Run LLM → image generation until right-click stop
+                    </label>
+                    <div class="llm-dec-settings-inline" style="margin-top:6px;">
+                        <span class="llm-dec-settings-hint">Delay before next Run LLM (ms)</span>
+                        <input type="number" class="llm-dec-settings-num" id="llm-dec-settings-loop-delay"
+                            min="0" max="10000" step="100" value="${loopDelay}">
+                    </div>
                 </div>
 
                 <!-- Auto-unload -->
@@ -171,7 +381,21 @@ function llmDecSaveSettings(tab) {
     const ttl      = parseInt(document.getElementById("llm-dec-settings-ttl")?.value)      || 300;
     const lmUrl    = document.getElementById("llm-dec-settings-url")?.value.trim()         || "http://localhost:1234";
     const autoSend = document.getElementById("llm-dec-settings-auto-send")?.checked        ?? false;
-    llmDecFireTrigger(trigger, { temperature: temp, timeout, gpu_ttl_enabled: ttlEn, gpu_ttl: ttl, lm_url: lmUrl, auto_send: autoSend });
+    const autoGen  = document.getElementById("llm-dec-settings-autogen")?.checked          ?? false;
+    const contGen  = document.getElementById("llm-dec-settings-continuous")?.checked       ?? false;
+    const loopDelay = parseInt(document.getElementById("llm-dec-settings-loop-delay")?.value) || 500;
+
+    llmDecFireTrigger(trigger, {
+        temperature: temp,
+        timeout,
+        gpu_ttl_enabled: ttlEn,
+        gpu_ttl: ttl,
+        lm_url: lmUrl,
+        auto_send: autoSend,
+        auto_generate: autoGen,
+        continuous_generate: contGen,
+        loop_delay: loopDelay
+    });
 
     const saveBtn = document.querySelector("#llm-dec-settings-modal .llm-dec-btn-ok");
     if (saveBtn) {
@@ -182,11 +406,40 @@ function llmDecSaveSettings(tab) {
     }
 }
 
-function llmDecAutoSend(text, tab) {
-    if (text) llmDecSend(text, tab);
+function llmDecSendAndMaybeGenerate(text, tab, fromLLM) {
+    if (!text) return text;
+
+    const s = llmDecGetSettings(tab);
+    const st = llmDecLoopState(tab);
+
+    // Continuousではプロンプト累積を避けるため、Add / Rep の表示に関わらず上書き送信する。
+    // Auto-generate単体では Add / Rep の選択を尊重する。
+    const forceReplace = !!(fromLLM && s.continuous_generate);
+
+    llmDecSend(text, tab, forceReplace);
+
+    // Continuousは「Run LLMの結果」からだけ開始する。
+    // Sendボタンで古い出力を手動送信しただけでは、意図せずループ開始しないようにする。
+    if (fromLLM && s.continuous_generate && !st.stopAfterCurrent) {
+        st.active = true;
+        llmDecSetLoopBadge(tab, "Continuous LLM generation is active. Right-click Run LLM to stop after current image.", "active");
+    }
+
+    // Auto-generateは手動Sendでも有効。ContinuousはAuto-generateを内包するが、開始元はRun LLMに限定。
+    if (s.auto_generate || (fromLLM && s.continuous_generate)) {
+        setTimeout(() => llmDecStartImageThenMaybeLoop(tab), 150);
+    }
+
     return text;
 }
 
+function llmDecAutoSend(text, tab) {
+    return llmDecSendAndMaybeGenerate(text, tab, true);
+}
+
+function llmDecManualSend(text, tab) {
+    return llmDecSendAndMaybeGenerate(text, tab, false);
+}
 
 /* change イベントで Gradio にコマンドを送る */
 function llmDecFireTrigger(el, payload) {
@@ -532,6 +785,23 @@ function llmDecDeleteFromModal(tab) {
 }
 .llm-dec-settings-url:focus { border-color: var(--body-text-color-subdued); }
 
+.llm-dec-loop-active {
+    background: #6b7280 !important;
+    color: #ffffff !important;
+    border-color: #9ca3af !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+    animation: none !important;
+}
+
+.llm-dec-loop-stopping {
+    background: #4b5563 !important;
+    color: #ffffff !important;
+    border-color: #9ca3af !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+    animation: none !important;
+}
 
 `;
     const style = document.createElement("style");
