@@ -1,6 +1,6 @@
 # sd-webui-llmuse
 
-LM Studio のローカル LLM を使って、日本語入力から Stable Diffusion 用英語プロンプトを生成する Forge Neo 拡張機能です
+LM Studio のローカル LLM を使って、日本語入力から英語プロンプトを生成する Forge Neo 拡張機能です
 
 ## 機能
 
