@@ -1,10 +1,10 @@
 # sd-webui-llmuse
 
-LM Studio のローカル LLM を使って、日本語入力から Stable Diffusion 用英語プロンプトを生成する SD WebUI Forge Neo 拡張機能です
+LM Studio のローカル LLM を使って、日本語入力から Stable Diffusion 用英語プロンプトを生成する Forge Neo 拡張機能です
 
 ## 機能
 
-- 日本語でイメージを入力するだけで Stable Diffusion 用の英語プロンプトを生成
+- 日本語でイメージを入力するだけで英語プロンプトを生成
 - Simple / Normal / Detail の 3 段階プリセットで生成の詳細度を調整
 - プリセットのシステムプロンプトを自由に編集・追加・削除可能
 - 使用するモデルをドロップダウンで切り替え
@@ -16,8 +16,11 @@ LM Studio のローカル LLM を使って、日本語入力から Stable Diffus
 1. [https://lmstudio.ai/](https://lmstudio.ai/) からインストーラーをダウンロードしてインストール
 2. **Discover** タブでモデルを検索し、**Instruct** モデルをダウンロード
 
+
    ※ 必ず Instruct モデルを使用してください。Base モデルではシステムプロンプトに従いません。
+
    ※ 開発・検証は 16GB VRAM 環境で `Qwen3-8B-Instruct` を使用しています。VRAM が少ない場合は `Qwen3-4B-Instruct`（12GB）などの軽量モデルが候補ですが、動作は未検証です。
+
    ※ NSFW 用途の場合は検索キーワードに `Heretic` や `abliterated` を加えると、検閲解除済みのモデルが見つかります。
 
 3. **Developer** タブで **Start Server** をクリックしてサーバーを起動
@@ -34,7 +37,7 @@ LM Studio のローカル LLM を使って、日本語入力から Stable Diffus
 
 ## 動作環境
 
-- Stable Diffusion WebUI Forge Neo
+- Forge Neo
 
 ## 使い方
 
