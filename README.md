@@ -92,6 +92,10 @@ Continuous を有効にすると、`Run LLM → プロンプト欄へ送信 → 
 
 ## 更新履歴
 
+### v1.2.0
+
+- 連続生成モードを追加。LLM生成 → 画像生成を自動でループさせることが可能に（contributed by @ryuhaku）
+
 ### v1.1.0
 
 - モデル選択欄の右に **Add / Rep** トグルを追加
@@ -99,7 +103,3 @@ Continuous を有効にすると、`Run LLM → プロンプト欄へ送信 → 
 ### v1.0.0
 
 - 初回リリース
-
-### Unreleased
-
-- Auto-generate と Continuous generation モードを追加
