@@ -7,6 +7,7 @@ from modules import scripts
 from modules.scripts import OnComponent
 
 LM_STUDIO_BASE = "http://localhost:1234"
+
 EXTENSION_DIR  = Path(__file__).resolve().parent.parent
 PRESETS_FILE   = EXTENSION_DIR / "presets.json"
 SETTINGS_FILE  = EXTENSION_DIR / "settings.json"
@@ -19,6 +20,7 @@ DEFAULT_SETTINGS = {
     "gpu_ttl":         300,
     "lm_url":          "http://localhost:1234",
     "auto_send":       False,
+    "send_mode":       "append",
     "last_preset":     "",
 }
 
@@ -73,6 +75,7 @@ def _save_settings(data: dict):
     if "gpu_ttl"         in data: s["gpu_ttl"]         = max(1, int(data["gpu_ttl"]))
     if "lm_url"          in data: s["lm_url"]          = str(data["lm_url"]).rstrip("/") or "http://localhost:1234"
     if "auto_send"       in data: s["auto_send"]       = bool(data["auto_send"])
+    if "send_mode"       in data: s["send_mode"]       = "replace" if str(data["send_mode"]) == "replace" else "append"
     SETTINGS_FILE.write_text(json.dumps(s, ensure_ascii=False, indent=2), encoding="utf-8")
     return s
 
@@ -248,16 +251,23 @@ class LLMDecoratorScript(scripts.Script):
                             scale=5, elem_id=f"llm_dec_dropdown_{tab}",
                         )
                         preset_btn   = gr.Button("📋", scale=1, min_width=40)
-                        settings_btn = gr.Button("⚙", scale=1, min_width=40)
+                        settings_btn = gr.Button("⚙",  scale=1, min_width=40)
                     user_input = gr.Textbox(lines=4, show_label=False)
                     run_btn = gr.Button("Run LLM", variant="primary")
                 with gr.Column(scale=1):
+                    send_mode = settings.get("send_mode", "append")
                     with gr.Row():
                         model_dropdown = gr.Dropdown(
                             choices=model_choices, value=model_value,
                             show_label=False,
                             elem_id=f"llm_dec_model_dropdown_{tab}",
                             allow_custom_value=True,
+                            scale=3,
+                        )
+                        send_mode_radio = gr.Radio(
+                            choices=["Add", "Rep"],
+                            value="Rep" if send_mode == "replace" else "Add",
+                            show_label=False, scale=0,
                         )
                     output = gr.Textbox(
                         lines=4, show_label=False, interactive=True,
@@ -302,9 +312,16 @@ class LLMDecoratorScript(scripts.Script):
                 value="", lines=1, show_label=False, interactive=False,
                 elem_id=f"llm_dec_force_unload_status_{tab}", elem_classes="llm-dec-sp-hidden",
             )
-            # ── イベント: ボタン / スライダー
+            # ── イベント: ボタン
             settings_btn.click(fn=None, _js=f"() => llmDecOpenSettings('{tab}')")
-            preset_btn.click(fn=None, _js=f"() => llmDecOpenModal('{tab}')")
+            preset_btn.click(fn=None,   _js=f"() => llmDecOpenModal('{tab}')")
+
+            def on_send_mode_change(value):
+                mode = "replace" if value == "Rep" else "append"
+                s = _save_settings({"send_mode": mode})
+                return gr.update(value=json.dumps(s, ensure_ascii=False))
+
+            send_mode_radio.change(fn=on_send_mode_change, inputs=[send_mode_radio], outputs=[settings_json])
             # ── イベント: プリセット
             def on_preset_change(name):
                 _save_last_preset(name)
@@ -332,11 +349,12 @@ class LLMDecoratorScript(scripts.Script):
                 return (
                     gr.update(choices=list(p.keys()), value=name),
                     gr.update(value=json.dumps(p, ensure_ascii=False)),
+                    gr.update(value=content),
                 )
 
             save_trigger.change(
                 fn=on_save_trigger, inputs=[save_trigger],
-                outputs=[preset_dropdown, presets_json],
+                outputs=[preset_dropdown, presets_json, system_prompt],
             )
 
             def on_delete_trigger(cmd):
@@ -393,14 +411,13 @@ class LLMDecoratorScript(scripts.Script):
 
             def on_model_dropdown_change(model_id):
                 s = _save_settings({"model": model_id or ""})
-                if model_id:
-                    _unload_all_models(s.get("lm_url", LM_STUDIO_BASE))
                 return gr.update(value=json.dumps(s, ensure_ascii=False))
 
             model_dropdown.change(
                 fn=on_model_dropdown_change,
                 inputs=[model_dropdown], outputs=[settings_json],
             )
+
 
             lm_result = gr.Textbox(
                 value="", lines=1, show_label=False, interactive=False,

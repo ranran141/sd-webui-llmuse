@@ -1,14 +1,20 @@
 // no builtin protection — all presets are editable/deletable
 
-const SVG_TRASH = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
-const SVG_PLUS  = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+const SVG_TRASH    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+const SVG_PLUS     = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
 
 /* ── プロンプト欄へ送信 ── */
 function llmDecSend(text, tab) {
     const el = gradioApp().querySelector(`#${tab}_prompt textarea`);
     if (!el) return text;
-    const existing = el.value.trim();
-    el.value = existing ? existing + "\n" + text : text;
+    const settingsEl = gradioApp().querySelector(`#llm_dec_settings_json_${tab} textarea`);
+    const s = settingsEl ? (() => { try { return JSON.parse(settingsEl.value); } catch { return {}; } })() : {};
+    if (s.send_mode === 'replace') {
+        el.value = text;
+    } else {
+        const existing = el.value.trim();
+        el.value = existing ? existing + "\n" + text : text;
+    }
     el.dispatchEvent(new Event("input", { bubbles: true }));
     return text;
 }
@@ -43,7 +49,7 @@ function llmDecOpenSettings(tab) {
     const ttlEnabled = s.gpu_ttl_enabled ?? false;
     const ttl        = s.gpu_ttl         ?? 300;
     const lmUrl      = s.lm_url          ?? "http://localhost:1234";
-    const autoSend   = s.auto_send       ?? false;
+    const autoSend   = s.auto_send ?? false;
     const temp       = parseFloat(s.temperature ?? 0.8).toFixed(1);
 
     const modal = document.createElement("div");
@@ -78,9 +84,9 @@ function llmDecOpenSettings(tab) {
                 <div class="llm-dec-settings-row">
                     <label class="llm-dec-settings-label">Auto-send</label>
                     <label class="llm-dec-settings-check-label">
-                        <input type="checkbox" id="llm-dec-settings-autosend"
+                        <input type="checkbox" id="llm-dec-settings-auto-send"
                             ${autoSend ? "checked" : ""}>
-                        Send to prompt automatically after generation
+                        <span class="llm-dec-settings-hint">Send to prompt automatically after generation</span>
                     </label>
                 </div>
 
@@ -164,8 +170,7 @@ function llmDecSaveSettings(tab) {
     const ttlEn    = document.getElementById("llm-dec-settings-ttl-enabled")?.checked      ?? false;
     const ttl      = parseInt(document.getElementById("llm-dec-settings-ttl")?.value)      || 300;
     const lmUrl    = document.getElementById("llm-dec-settings-url")?.value.trim()         || "http://localhost:1234";
-    const autoSend = document.getElementById("llm-dec-settings-autosend")?.checked         ?? false;
-
+    const autoSend = document.getElementById("llm-dec-settings-auto-send")?.checked        ?? false;
     llmDecFireTrigger(trigger, { temperature: temp, timeout, gpu_ttl_enabled: ttlEn, gpu_ttl: ttl, lm_url: lmUrl, auto_send: autoSend });
 
     const saveBtn = document.querySelector("#llm-dec-settings-modal .llm-dec-btn-ok");
@@ -181,6 +186,7 @@ function llmDecAutoSend(text, tab) {
     if (text) llmDecSend(text, tab);
     return text;
 }
+
 
 /* change イベントで Gradio にコマンドを送る */
 function llmDecFireTrigger(el, payload) {
@@ -525,6 +531,7 @@ function llmDecDeleteFromModal(tab) {
     font-size: 12px; font-family: monospace; outline: none;
 }
 .llm-dec-settings-url:focus { border-color: var(--body-text-color-subdued); }
+
 
 `;
     const style = document.createElement("style");
